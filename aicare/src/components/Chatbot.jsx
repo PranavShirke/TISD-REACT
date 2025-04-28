@@ -1,102 +1,103 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 import React, { useState, useRef, useEffect } from 'react';
-import { FaRobot, FaPaperPlane, FaTimes, FaSpinner } from 'react-icons/fa';
+import { FaRobot, FaTimes, FaPaperPlane } from 'react-icons/fa';
+import { GEMINI_API_KEY } from '../config/api';
 import './Chatbot.css';
 
-// ⚠️ Replace this with your actual Gemini API Key (for testing only; NOT for production)
-const GEMINI_API_KEY = 'AIzaSyAwxsDRg2ZsOHRlr6wj88IQQ1jwQpXnkDM'; // <-- Replace with real key
-
-const Chatbot = () => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState(() => {
-    const savedMessages = localStorage.getItem('chatHistory');
-    return savedMessages ? JSON.parse(savedMessages) : [
-      { text: "Hello! I'm your AI health assistant powered by Gemini. How can I help you today?", sender: 'bot' }
-    ];
-  });
+const Chatbot = ({ isOpen, onClose }) => {
+  const [messages, setMessages] = useState([
+    { text: "Hello! I'm Sushruta, your AI health assistant. How can I help you today?", sender: 'bot' }
+  ]);
   const [inputMessage, setInputMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [error, setError] = useState(null);
   const messagesEndRef = useRef(null);
-
-  useEffect(() => {
-    localStorage.setItem('chatHistory', JSON.stringify(messages));
-    scrollToBottom();
-  }, [messages]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!inputMessage.trim() || isTyping) return;
 
-    const userMessage = inputMessage.trim();
+    // Add user message
+    setMessages(prev => [...prev, { text: inputMessage, sender: 'user' }]);
     setInputMessage('');
-    setMessages(prev => [...prev, { text: userMessage, sender: 'user' }]);
     setIsTyping(true);
+    setError(null);
 
     try {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=GEMINI_API_KEY`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{
-              text: `You are a helpful and friendly AI health assistant. Provide accurate, concise, and professional responses about health-related topics. If you're unsure about something, say so rather than providing potentially incorrect information.
+      console.log('Sending request to Gemini API...');
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            contents: [{
+              role: "user",
+              parts: [{
+                text: `You are Sushruta, an AI health assistant. Please provide helpful and accurate health information. 
+                If the question is about specific medical conditions or treatments, remind the user to consult a healthcare professional.
+                User's question: ${inputMessage}`
+              }]
+            }],
+            generationConfig: {
+              temperature: 0.7,
+              topK: 40,
+              topP: 0.95,
+              maxOutputTokens: 1024,
+            },
+            safetySettings: [
+              {
+                category: "HARM_CATEGORY_HARASSMENT",
+                threshold: "BLOCK_MEDIUM_AND_ABOVE"
+              },
+              {
+                category: "HARM_CATEGORY_HATE_SPEECH",
+                threshold: "BLOCK_MEDIUM_AND_ABOVE"
+              },
+              {
+                category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                threshold: "BLOCK_MEDIUM_AND_ABOVE"
+              },
+              {
+                category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+                threshold: "BLOCK_MEDIUM_AND_ABOVE"
+              }
+            ]
+          }),
+        }
+      );
 
-Previous conversation:
-${messages.map(msg => `${msg.sender === 'user' ? 'User' : 'Assistant'}: ${msg.text}`).join('\n')}
-
-User: ${userMessage}`
-            }]
-          }],
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 500,
-            topP: 0.8,
-            topK: 40
-          }
-        })
-      });
-
-      const data = await response.json();
+      console.log('Response status:', response.status);
+      const responseText = await response.text();
+      console.log('Raw response:', responseText);
 
       if (!response.ok) {
-        throw new Error(data.error?.message || 'API Error');
+        throw new Error(`API request failed with status ${response.status}: ${responseText}`);
       }
 
-      const botResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!botResponse) {
-        throw new Error('Invalid response from Gemini API');
+      const data = JSON.parse(responseText);
+      console.log('Parsed response:', data);
+      
+      if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
+        throw new Error("Invalid response format from API");
       }
 
+      const botResponse = data.candidates[0].content.parts[0].text;
       setMessages(prev => [...prev, { text: botResponse, sender: 'bot' }]);
     } catch (error) {
-      console.error('Error fetching AI response:', error);
+      console.error("Detailed error:", error);
+      setError(error.message);
       setMessages(prev => [...prev, { 
-        text: `Error: ${error.message || 'Something went wrong'}. Please try again later.`, 
+        text: `I apologize, but I'm having trouble connecting right now. Error: ${error.message}. Please try again later or consult with your healthcare provider.`, 
         sender: 'bot' 
       }]);
     } finally {
@@ -104,67 +105,62 @@ User: ${userMessage}`
     }
   };
 
-  const clearChatHistory = () => {
-    setMessages([
-      { text: "Hello! I'm your AI health assistant powered by Gemini. How can I help you today?", sender: 'bot' }
-    ]);
-    localStorage.removeItem('chatHistory');
-  };
+  if (!isOpen) return null;
 
   return (
-    <>
-      <button className="chatbot-toggle" onClick={() => setIsOpen(!isOpen)}>
-        <FaRobot className="chatbot-icon" />
-      </button>
-
-      {isOpen && (
-        <div className="chatbot-container">
-          <div className="chatbot-header">
-            <div className="chatbot-title">
-              <FaRobot className="chatbot-icon" />
-              <h3>AI Health Assistant (Gemini)</h3>
-            </div>
-            <div className="chatbot-actions">
-              <button className="clear-button" onClick={clearChatHistory} title="Clear chat history">
-                Clear
-              </button>
-              <button className="close-button" onClick={() => setIsOpen(false)}>
-                <FaTimes />
-              </button>
-            </div>
-          </div>
-
-          <div className="chatbot-messages">
-            {messages.map((message, index) => (
-              <div key={index} className={`message ${message.sender}`}>
-                {message.text}
-              </div>
-            ))}
-            {isTyping && (
-              <div className="message bot typing">
-                <FaSpinner className="spinner-icon" />
-                <span>AI is typing...</span>
-              </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-
-          <form className="chatbot-input" onSubmit={handleSendMessage}>
-            <input
-              type="text"
-              value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
-              placeholder="Type your message..."
-              disabled={isTyping}
-              required
-            />
-            <button type="submit" disabled={isTyping}>
-              <FaPaperPlane />
-            </button>
-          </form>
+    <div className="chatbot-container">
+      <div className="chatbot-header">
+        <div className="chatbot-title">
+          <FaRobot className="chatbot-icon" />
+          <h3>Sushruta AI Assistant</h3>
         </div>
-      )}
-    </>
+        <button className="close-button" onClick={onClose}>
+          <FaTimes />
+        </button>
+      </div>
+
+      <div className="chatbot-messages">
+        {messages.map((message, index) => (
+          <div 
+            key={index} 
+            className={`message ${message.sender === 'user' ? 'user-message' : 'bot-message'}`}
+          >
+            {message.text}
+          </div>
+        ))}
+        {isTyping && (
+          <div className="typing-indicator">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+        )}
+        {error && (
+          <div className="error-message">
+            {error}
+          </div>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      <form className="chatbot-input" onSubmit={handleSendMessage}>
+        <input
+          type="text"
+          value={inputMessage}
+          onChange={(e) => setInputMessage(e.target.value)}
+          placeholder="Type your message..."
+          className="message-input"
+          disabled={isTyping}
+        />
+        <button 
+          type="submit" 
+          className="send-button"
+          disabled={isTyping || !inputMessage.trim()}
+        >
+          <FaPaperPlane />
+        </button>
+      </form>
+    </div>
   );
 };
 

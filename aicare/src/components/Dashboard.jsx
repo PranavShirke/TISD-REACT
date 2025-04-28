@@ -2,7 +2,8 @@ import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { getAuth, signOut } from "firebase/auth";
 import { getFirestore, doc, getDoc } from "firebase/firestore";
-import { FaUser, FaChartLine, FaFileMedical, FaSignOutAlt, FaEdit, FaCalculator, FaPhone } from "react-icons/fa";
+import { FaUser, FaChartLine, FaFileMedical, FaSignOutAlt, FaEdit, FaCalculator, FaPhone, FaRobot, FaDiagnoses } from "react-icons/fa";
+import Chatbot from "./Chatbot";
 import "./Dashboard.css";
 
 const Dashboard = () => {
@@ -11,6 +12,7 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const auth = getAuth();
   const db = getFirestore();
+  const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -35,7 +37,7 @@ const Dashboard = () => {
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      navigate("/login");
+      navigate("/");
     } catch (error) {
       console.error("Error signing out:", error);
     }
@@ -59,7 +61,7 @@ const Dashboard = () => {
       <aside className="sidebar">
         <div className="sidebar-header">
           <h1 className="sidebar-title">
-            <span>AI</span>Carelink
+            <span>AA</span>ROGYA 
           </h1>
         </div>
         <nav className="sidebar-nav">
@@ -78,6 +80,10 @@ const Dashboard = () => {
           <Link to="/emergency-contacts" className="nav-link">
             <FaPhone className="nav-icon" />
             Emergency Contacts
+          </Link>
+          <Link to="/disease-predictor" className="nav-link">
+            <FaDiagnoses className="nav-icon" />
+            Disease Predictor
           </Link>
           <Link to="/profile" className="nav-link">
             <FaUser className="nav-icon" />
@@ -120,6 +126,15 @@ const Dashboard = () => {
             </div>
           </div>
         </header>
+
+        {/* Chatbot Toggle Button */}
+        <button className="dashboard-chatbot-toggle" onClick={() => setIsOpen(!isOpen)}>
+          <FaRobot />
+          <span>Ask Sushruta</span>
+        </button>
+
+        {/* Chatbot Component */}
+        <Chatbot isOpen={isOpen} onClose={() => setIsOpen(false)} />
 
         {/* Stats Cards */}
         <section className="stats-grid">

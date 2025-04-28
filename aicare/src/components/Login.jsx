@@ -1,119 +1,128 @@
 // Login.jsx
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { getAuth, signInWithEmailAndPassword } from "firebase/auth";
-import { FaUser, FaLock } from "react-icons/fa";
+import { Link, useNavigate } from "react-router-dom";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword } from "firebase/auth";
+import { getFirestore, doc, setDoc } from "firebase/firestore";
+import { FaUser, FaLock, FaEnvelope, FaUserPlus, FaSignInAlt } from "react-icons/fa";
 import "./Login.css";
 
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
   const navigate = useNavigate();
   const auth = getAuth();
+  const db = getFirestore();
 
-  const handleLogin = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
     setLoading(true);
 
     try {
-      // Validate email format
-      if (!email.includes('@') || !email.includes('.')) {
-        throw new Error("Please enter a valid email address");
+      if (isSignUp) {
+        if (password !== confirmPassword) {
+          throw new Error("Passwords do not match");
+        }
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        // Create a new document in Firestore for the user
+        await setDoc(doc(db, "medicalForms", userCredential.user.uid), {
+          email: email,
+          createdAt: new Date().toISOString(),
+        });
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
       }
-
-      // Validate password length
-      if (password.length < 6) {
-        throw new Error("Password must be at least 6 characters long");
-      }
-
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      console.log("Login successful:", userCredential.user);
       navigate("/dashboard");
     } catch (error) {
-      console.error("Login error:", error);
-      switch (error.code) {
-        case "auth/user-not-found":
-          setError("No account found with this email address");
-          break;
-        case "auth/wrong-password":
-          setError("Incorrect password");
-          break;
-        case "auth/too-many-requests":
-          setError("Too many failed attempts. Please try again later");
-          break;
-        case "auth/invalid-email":
-          setError("Invalid email address");
-          break;
-        default:
-          setError("Failed to sign in. Please try again");
-      }
+      setError(error.message);
     } finally {
       setLoading(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="loading-container">
-        <div className="spinner"></div>
-      </div>
-    );
-  }
-
   return (
     <div className="login-container">
       <div className="login-card">
         <div className="login-header">
-          <h1 className="login-title">Welcome Back</h1>
-          <p className="login-subtitle">Sign in to access your dashboard</p>
+          <h1>{isSignUp ? "Create Account" : "Welcome Back"}</h1>
+          <p>{isSignUp ? "Sign up to get started" : "Sign in to continue"}</p>
         </div>
 
-        <form className="login-form" onSubmit={handleLogin}>
+        <form onSubmit={handleSubmit} className="login-form">
           <div className="form-group">
-            <label className="form-label">Email</label>
-            <div className="input-wrapper">
-              <FaUser className="input-icon" />
-              <input
-                type="email"
-                className="form-input"
-                placeholder="Enter your email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-              />
-            </div>
+            <FaEnvelope className="input-icon" />
+            <input
+              type="email"
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
           </div>
 
           <div className="form-group">
-            <label className="form-label">Password</label>
-            <div className="input-wrapper">
+            <FaLock className="input-icon" />
+            <input
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+          </div>
+
+          {isSignUp && (
+            <div className="form-group">
               <FaLock className="input-icon" />
               <input
                 type="password"
-                className="form-input"
-                placeholder="Enter your password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Confirm Password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
                 required
-                autoComplete="current-password"
               />
             </div>
-          </div>
+          )}
 
           {error && <div className="error-message">{error}</div>}
 
-          <button
-            type="submit"
-            className="login-button"
-            disabled={loading}
-          >
-            {loading ? "Signing in..." : "Sign In"}
+          <button type="submit" className="login-button" disabled={loading}>
+            {loading ? (
+              <div className="loading-spinner"></div>
+            ) : (
+              <>
+                {isSignUp ? (
+                  <>
+                    <FaUserPlus className="button-icon" />
+                    Sign Up
+                  </>
+                ) : (
+                  <>
+                    <FaSignInAlt className="button-icon" />
+                    Sign In
+                  </>
+                )}
+              </>
+            )}
           </button>
         </form>
+
+        <div className="toggle-form">
+          <p>
+            {isSignUp ? "Already have an account?" : "Don't have an account?"}
+            <button
+              type="button"
+              className="toggle-button"
+              onClick={() => setIsSignUp(!isSignUp)}
+            >
+              {isSignUp ? "Sign In" : "Sign Up"}
+            </button>
+          </p>
+        </div>
       </div>
     </div>
   );
